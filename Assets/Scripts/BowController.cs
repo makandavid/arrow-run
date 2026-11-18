@@ -4,7 +4,6 @@ using UnityEngine.InputSystem;
 public class BowController : MonoBehaviour
 {
     [SerializeField] private Arrow arrowPrefab;
-    [SerializeField] private Transform player;
     [SerializeField] private PlayerHealth health;
 
     [Header("Shooting")]
@@ -13,10 +12,23 @@ public class BowController : MonoBehaviour
     [SerializeField] private float maxChargeTime = 2f;
     [SerializeField] private float shootCooldown = 0.8f;
 
+    [Header("Teleport")]
+    [SerializeField] private float lookDownThreshold = -0.3f;  // camera forward.y below this counts as "looking at the ground"
+    [SerializeField] private float teleportDistance = 6f;
+    [SerializeField] private float teleportCooldown = 5f;
+    [SerializeField] private float teleportInvulnerability = 1.5f;
+    [SerializeField] private float trackStartZ = 0f;
+
+    private Transform player;
     private bool charging;
-    private float chargeStart, nextShot, tripleUntil;
+    private float chargeStart, nextShot, tripleUntil, nextTeleport;
 
     public void GrantTripleShot(float seconds) { tripleUntil = Time.time + seconds; }
+
+    private void Awake()
+    {
+        player = transform.root;
+    }
 
     private void Update()
     {
@@ -26,7 +38,8 @@ public class BowController : MonoBehaviour
 
         if (p.press.wasPressedThisFrame)
         {
-            charging = true; chargeStart = Time.time; 
+            if (transform.forward.y < lookDownThreshold) TryTeleport();
+            else { charging = true; chargeStart = Time.time; }
         }
 
         if (p.press.wasReleasedThisFrame)
@@ -34,6 +47,18 @@ public class BowController : MonoBehaviour
             if (charging) Shoot(Mathf.Clamp01((Time.time - chargeStart) / maxChargeTime));
             charging = false;
         }
+    }
+
+    private void TryTeleport()
+    {
+        if (Time.time < nextTeleport) return;
+        nextTeleport = Time.time + teleportCooldown;
+
+        Vector3 pos = player.position;
+        pos.z = Mathf.Max(trackStartZ, pos.z - teleportDistance);
+        player.position = pos;
+
+        health.GrantInvulnerability(teleportInvulnerability);
     }
 
     private void Shoot(float charge)
